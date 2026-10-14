@@ -3,7 +3,7 @@ import unittest
 from pathlib import Path
 
 from app.rag.hybrid_store import HybridKnowledgeBase
-from app.tools.commerce_analytics_tool import _bounded, _consume_sse
+from app.tools.analytics_query_tool import _bounded, _consume_sse
 from app.tools.evidence_tools import evaluate_evidence
 from app.utils.path_utils import resolve_path
 

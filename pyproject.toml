@@ -1,7 +1,7 @@
 [project]
-name = "commerce-compass"
+name = "enterprise-decision-agents"
 version = "0.1.0"
-description = "Evidence-aware multi-agent growth intelligence for ecommerce teams."
+description = "Evidence-aware multi-agent decision platform for enterprise operations."
 requires-python = ">=3.12,<3.13"
 dependencies = [
     "aiofiles>=23.0.0",

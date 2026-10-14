@@ -1,6 +1,6 @@
 """有依赖意识的并行研究入口。
 
-市场、经营问数和内部知识彼此没有数据依赖时用 TaskGroup 并发；证据审查必须
+外部情报、经营分析和内部知识彼此没有数据依赖时用 TaskGroup 并发；证据审查必须
 在该工具返回后再执行，避免审查一个尚未完整的证据集。
 """
 
@@ -13,7 +13,7 @@ from time import perf_counter
 from langchain_core.tools import tool
 
 from app.context_engineering.runtime import budget_snapshot, trace
-from app.tools.commerce_analytics_tool import commerce_analytics_query
+from app.tools.analytics_query_tool import analytics_query
 from app.tools.knowledge_tools import search_internal_knowledge
 from app.tools.tavily_tool import internet_search
 
@@ -21,7 +21,7 @@ from app.tools.tavily_tool import internet_search
 @tool
 async def parallel_research(
     question: str,
-    include_market: bool = True,
+    include_external_intelligence: bool = True,
     include_analytics: bool = True,
     include_knowledge: bool = True,
 ) -> str:
@@ -31,15 +31,15 @@ async def parallel_research(
     evidence_id 交给证据审查助手。可关闭与问题无关的数据源以节省预算。
     """
     started = perf_counter()
-    trace("parallel_research_started", question=question, market=include_market, analytics=include_analytics, knowledge=include_knowledge)
+    trace("parallel_research_started", question=question, external_intelligence=include_external_intelligence, analytics=include_analytics, internal_knowledge=include_knowledge)
     jobs: dict[str, asyncio.Task] = {}
     async with asyncio.TaskGroup() as group:
-        if include_market:
-            jobs["market_intelligence"] = group.create_task(asyncio.to_thread(internet_search.invoke, {"query": question, "topic": "general", "max_results": 5}))
+        if include_external_intelligence:
+            jobs["external_intelligence"] = group.create_task(asyncio.to_thread(internet_search.invoke, {"query": question, "topic": "general", "max_results": 5}))
         if include_analytics:
-            jobs["commerce_analytics"] = group.create_task(asyncio.to_thread(commerce_analytics_query.invoke, {"question": question}))
+            jobs["analytics"] = group.create_task(asyncio.to_thread(analytics_query.invoke, {"question": question}))
         if include_knowledge:
-            jobs["knowledge_base"] = group.create_task(asyncio.to_thread(search_internal_knowledge.invoke, {"question": question, "limit": 5}))
+            jobs["internal_knowledge"] = group.create_task(asyncio.to_thread(search_internal_knowledge.invoke, {"question": question, "limit": 5}))
     results = {name: task.result() for name, task in jobs.items()}
     payload = {
         "question": question,

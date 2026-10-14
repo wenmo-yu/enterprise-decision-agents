@@ -1,11 +1,11 @@
-"""经营知识子智能体配置。"""
+"""内部知识专家配置。"""
 
 from app.agent.prompts import sub_agents_content
 from app.tools.knowledge_tools import search_internal_knowledge
 
 knowledge_base_agent = {
-    "name": sub_agents_content["knowledge_base"]["name"],
-    "description": sub_agents_content["knowledge_base"]["description"],
-    "system_prompt": sub_agents_content["knowledge_base"]["system_prompt"],
+    "name": sub_agents_content["internal_knowledge"]["name"],
+    "description": sub_agents_content["internal_knowledge"]["description"],
+    "system_prompt": sub_agents_content["internal_knowledge"]["system_prompt"],
     "tools": [search_internal_knowledge],
 }

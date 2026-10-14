@@ -1,0 +1,17 @@
+# 行业术语与报告结构属于配置层；Agent 编排、检索与证据校验不依赖特定行业。
+domain:
+  name: enterprise_operations
+  display_name: 企业经营分析
+terminology:
+  metric: 业务指标
+  dimension: 分析维度
+  external_information: 外部情报
+  internal_knowledge: 内部知识
+report:
+  sections:
+    - 经营事实
+    - 外部证据
+    - 内部证据
+    - 分析推断
+    - 待验证项
+    - 行动建议

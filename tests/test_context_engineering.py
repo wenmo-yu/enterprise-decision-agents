@@ -23,9 +23,9 @@ class ContextEngineeringTests(unittest.TestCase):
                 from app.context_engineering.runtime import current_state
 
                 current_state().max_expert_calls = 1
-                reserve_expert_call("market_intelligence", "test")
+                reserve_expert_call("external_intelligence", "test")
                 with self.assertRaises(BudgetExceeded):
-                    reserve_expert_call("knowledge_base", "test")
+                    reserve_expert_call("internal_knowledge", "test")
             finally:
                 summary = end_run(token)
             self.assertEqual(summary["expert_calls"], 1)
@@ -34,12 +34,12 @@ class ContextEngineeringTests(unittest.TestCase):
         with tempfile.TemporaryDirectory() as directory:
             token = start_run(directory)
             try:
-                evidence_id = record_evidence("经营数据", {"summary": "GMV 下降 12%"})
+                evidence_id = record_evidence("经营数据", {"summary": "收入下降 12%"})
                 result = json.loads(
                     verify_claim_support.invoke(
                         {
                             "claims_json": json.dumps(
-                                [{"claim": "GMV 下降 12%", "evidence_ids": [evidence_id], "evidence_quote": "GMV 下降 12%"}],
+                                [{"claim": "收入下降 12%", "evidence_ids": [evidence_id], "evidence_quote": "收入下降 12%"}],
                                 ensure_ascii=False,
                             )
                         }
@@ -58,13 +58,13 @@ class ContextEngineeringTests(unittest.TestCase):
     def test_trajectory_eval_checks_expected_experts(self):
         result = evaluate_trajectory(
             [
-                {"event": "expert_started", "expert": "market_intelligence"},
-                {"event": "expert_started", "expert": "commerce_analytics"},
+                {"event": "expert_started", "expert": "external_intelligence"},
+                {"event": "expert_started", "expert": "analytics"},
             ],
-            {"required_experts": ["market_intelligence", "knowledge_base"]},
+            {"required_experts": ["external_intelligence", "internal_knowledge"]},
         )
         self.assertFalse(result["passed"])
-        self.assertEqual(result["missing_experts"], ["knowledge_base"])
+        self.assertEqual(result["missing_experts"], ["internal_knowledge"])
 
 
 if __name__ == "__main__":

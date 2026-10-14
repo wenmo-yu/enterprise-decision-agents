@@ -1,4 +1,4 @@
-"""供经营知识助手调用的本地 Hybrid RAG 工具。"""
+"""供内部知识专家调用的本地 Hybrid RAG 工具。"""
 
 import json
 
@@ -16,7 +16,7 @@ def search_internal_knowledge(question: str, limit: int = 5) -> str:
     """从平台自建知识库检索内部资料并返回附来源、分块号和融合分数的原始证据。"""
     monitor.report_tool("内部 Hybrid RAG 检索", {"question": question, "limit": limit})
     try:
-        reserve_expert_call("knowledge_base", question)
+        reserve_expert_call("internal_knowledge", question)
         result_limit = max(1, min(limit, 8))
         evidence = [{**item, "scope": "global"} for item in HybridKnowledgeBase().search(question, limit=result_limit)]
         thread_id = get_thread_context()
@@ -28,7 +28,7 @@ def search_internal_knowledge(question: str, limit: int = 5) -> str:
         if not evidence:
             return "没有找到足够相关的内部知识证据。请补充资料或调整问题。"
         payload = {"query": question, "evidence": evidence}
-        evidence_id, compact, truncated = record_expert_result("knowledge_base", payload, "内部材料")
+        evidence_id, compact, truncated = record_expert_result("internal_knowledge", payload, "内部材料")
         if isinstance(compact, dict):
             compact["evidence_id"] = evidence_id
             compact["context_truncated"] = truncated

@@ -23,11 +23,31 @@ def load_yaml(file_path: Path) -> dict[str, Any]:
         return yaml.safe_load(f)
 
 
+def render_profile(value: Any, variables: dict[str, str]) -> Any:
+    """递归注入领域 Profile，避免把行业词汇固化到 Agent 提示词。"""
+    if isinstance(value, str):
+        return value.format(**variables)
+    if isinstance(value, list):
+        return [render_profile(item, variables) for item in value]
+    if isinstance(value, dict):
+        return {key: render_profile(item, variables) for key, item in value.items()}
+    return value
+
+
 # 当前文件位于 app/agent/prompts.py，parents[1] 即 app 目录
 app_root_path = Path(__file__).parents[1]
 yaml_file_path = app_root_path / "prompt" / "prompts.yml"
 
 prompt_yaml_content = load_yaml(yaml_file_path)
+domain_profile = load_yaml(app_root_path / "config" / "domain_profile.yml")
+profile_variables = {
+    "domain_name": domain_profile["domain"]["display_name"],
+    "metric": domain_profile["terminology"]["metric"],
+    "dimension": domain_profile["terminology"]["dimension"],
+    "external_information": domain_profile["terminology"]["external_information"],
+    "internal_knowledge": domain_profile["terminology"]["internal_knowledge"],
+}
+prompt_yaml_content = render_profile(prompt_yaml_content, profile_variables)
 
 # 主智能体提示词配置
 main_agent_content = prompt_yaml_content["main_agent"]

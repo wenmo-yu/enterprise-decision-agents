@@ -36,24 +36,24 @@ interface ConversationThreadProps {
 
 const TASK_EXAMPLES = [
   {
-    tool: "市场情报助手",
-    title: "竞品与平台信号",
+    tool: "外部情报专家",
+    title: "外部事件研判",
     prompt:
-      "请检索近 30 天主要竞品的女装促销动作与平台规则变化，列出可验证来源、发布日期及可能影响。",
+      "请检索近 30 天行业动态、竞争信息与政策规则变化，列出可验证来源、发布日期及可能影响。",
     icon: <CloudServerOutlined aria-hidden />,
   },
   {
-    tool: "经营问数助手",
+    tool: "经营问数专家",
     title: "经营异常诊断",
     prompt:
-      "请调用经营问数服务，分析近 30 天女装品类 GMV、转化率和客单价的变化，保留指标口径、时间范围和执行状态。",
+      "请调用经营问数服务，分析近 30 天收入、客户数与利润率的变化，保留指标口径、时间范围和执行状态。",
     icon: <DatabaseOutlined aria-hidden />,
   },
   {
-    tool: "经营知识助手",
+    tool: "内部知识专家",
     title: "内部文档问答",
     prompt:
-      "请查询公司内部活动复盘中关于女装品类策略的内容，整理三条可执行建议并说明适用边界。",
+      "请查询公司内部业务复盘中与区域经营相关的内容，整理三条可执行建议并说明适用边界。",
     icon: <FileSearchOutlined aria-hidden />,
   },
   {

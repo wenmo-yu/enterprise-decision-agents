@@ -1,66 +1,43 @@
 # 多智能体经营决策平台
 
-这是一个面向品牌/平台招商运营团队的多智能体经营决策平台。它将**经独立问数服务校验的经营事实**、公开市场情报、内部经营资料和用户附件汇聚为一份可追溯的增长诊断与行动建议。
+面向企业经营分析场景，融合结构化业务数据、外部情报、内部知识与用户附件，通过多智能体协作完成跨源取证、归因分析、证据审查与报告生成，输出带来源引用的经营诊断与行动建议。
 
-它刻意不重复实现 Text-to-SQL：已有的「电商智能问数 Agent」专注自然语言到安全 SQL、Schema 混合检索与只读执行；本平台通过受控 HTTP 合约消费它的结果，负责跨源取证、归因、证据审查和报告交付。
+平台不重复实现 Text-to-SQL。它通过受控 HTTP 合约接入独立的「企业经营智能问数 Agent」，消费经过 Schema 检索、SQL 校验与只读执行后的经营事实；本仓库聚焦多智能体协作、跨源证据链与可追溯报告。
 
-## 产品闭环
+## 运行示例
 
-```text
-经营问题
-  ├─ 市场情报助手：竞品 / 平台规则 / 舆情 / 行业趋势
-  ├─ 经营问数助手：调用独立问数服务，取得已校验的业务事实
-  ├─ 经营知识助手：SOP / 活动复盘 / 品类策略 / 上传附件
-  └─ 证据审查助手：完整度、时效、来源覆盖与待验证项
-                         ↓
-             诊断归因、策略建议、Markdown / PDF 报告
-```
+![多智能体经营决策平台的经营分析工作台](docs/showcase/dashboard-preview.png)
 
-## 界面预览
+界面会展示专家调用、证据登记、预算事件与 Markdown/PDF 报告产物。预览任务使用通用的“区域收入下降”问题，不依赖特定行业的数据模型。
 
-![多智能体经营决策平台：从任务拆解、跨源证据到行动建议的决策工作台](docs/showcase/dashboard-preview.png)
+## 核心能力
 
-> 预览图为静态产品原型，用于展示核心交互与信息架构；运行中的界面会实时展示子智能体调用、证据事件和报告产物。
+- **外部情报专家**：检索行业动态、竞争信息、政策规则、公开信息及其他外部事件，保留链接与发布时间。
+- **经营问数专家**：调用独立分析服务，取得已校验的指标、时间范围、执行状态与审计摘要；本项目不连接业务库、不生成 SQL。
+- **内部知识专家**：通过自建 Hybrid RAG 检索 SOP、业务复盘、制度文档、产品或服务资料与会话附件。
+- **证据审查专家**：校验来源完整度、真实证据编号、引文定位、关键数值与支持关系；证据不足的因果判断会降级为推断。
 
-## 与「电商智能问数 Agent」的边界
-
-| 能力 | 电商智能问数 Agent | 多智能体经营决策平台 |
-| --- | --- | --- |
-| 目标 | 回答“指标是多少、按什么维度变化” | 回答“为什么发生、应做什么、证据是否充分” |
-| 数据访问 | Schema 检索、SQL 生成/校验、只读执行 | 仅调用问数服务，不连接业务库、不生成 SQL |
-| 核心技术 | LangGraph、Qdrant、Elasticsearch、MySQL | DeepAgents 多智能体、FastAPI、WebSocket、Tavily、自建 Hybrid RAG、证据规则引擎 |
-| 产物 | 可审计的数据答案 | 跨源证据链、增长诊断、行动清单、Markdown/PDF 报告 |
-
-## 多智能体设计
-
-- **市场情报助手**：采集竞品动作、平台规则、行业趋势和公开用户反馈，保留 URL 与发布时间。
-- **经营问数助手**：调用已部署的问数服务，要求返回指标口径、时间范围、执行状态与 SQL 审计摘要；服务边界确保本项目没有直接 SQL 执行能力。
-- **经营知识助手**：从平台自建 Hybrid RAG 检索企业内部策略、活动复盘和商品资料；每条证据保留文件名、分块编号和融合分数。
-- **证据审查助手**：在出结论前用确定性规则检查来源类型、URL、时间范围和缺失证据，避免“有结论无依据”。
-- **编排主智能体**：负责假设拆解、选择性路由、归因和报告生成；不把不充分的证据表述为事实。
-
-## 上下文工程、预算调度与轨迹评测
-
-平台将“调用多个 Agent”收敛为可执行的协作契约，而不是把所有历史、网页和工具输出无差别塞入模型上下文：
+## 系统架构
 
 ```text
-跨源经营问题
+企业经营问题
         ↓
-parallel_research（TaskGroup 并发）
-市场情报 ─┬─ 经营问数 ─┬─ 内部 Hybrid RAG
-          └── 各自产生 evidence_id 与原始 artifact ──┘
-                              ↓
-               仅回传有上限的结构化高信号摘要
-                              ↓
-       证据审查：完整度 → 结论级支持关系 → 最终报告
+主 Agent：任务拆解、依赖识别与预算控制
+        ↓
+┌─────────── TaskGroup 并行取证 ────────────┐
+外部情报专家        经营问数专家        内部知识专家
+└──────────────────────────────────────────┘
+        ↓ evidence_id + 结构化摘要
+证据审查专家：完整度 → 结论级支持关系
+        ↓
+经营诊断、待验证项、行动建议、Markdown / PDF
 ```
 
-- 无依赖的市场、问数、知识检索由 `asyncio.TaskGroup` 并发；证据审查明确依赖三类证据完成后再执行。
-- 每个专家工具调用前都会检查最大次数、总时限和可回传上下文预算；超额调用由程序拒绝，不依赖提示词“节约 Token”。Token 是本地保守估算，用于约束而非冒充模型厂商计费。
-- 原始网页、SSE 事件与分块写入 `output/session_<id>/artifacts/`；主 Agent 只收到截断后的结构化摘要及 `evidence_id`。每轮还写入 `trace.jsonl`，记录专家调用、预算拒绝与证据登记事件。
-- 结论审查同时提供 `evaluate_evidence`（引用字段完整度）与 `verify_claim_support`（真实 evidence_id、原文引文、数值可核对性、因果结论降级）。`direct` 只代表原文引用与数值可定位，绝不把共现写成因果证明。
+## Context Engineering 与预算调度
 
-运行预算可在 `.env` 中调整：
+无依赖的外部情报、经营分析和内部知识检索由 `asyncio.TaskGroup` 并发执行；证据审查在取证完成后才运行。每个专家调用前，程序会检查调用次数、上下文预算和任务时限。
+
+完整网页、SSE 事件和文档分块外置到 `output/session_<id>/artifacts/`，主 Agent 只接收受上限控制的结构化摘要与 `evidence_id`。每轮生成 `trace.jsonl`，记录专家调用、预算拒绝、证据登记与结论审查事件。
 
 ```dotenv
 AGENT_MAX_EXPERT_CALLS=8
@@ -68,84 +45,97 @@ AGENT_MAX_CONTEXT_TOKENS=12000
 AGENT_MAX_WALL_TIME_SECONDS=180
 ```
 
-### 轨迹评测
+Token 是本地保守估算，用于控制上下文膨胀，不作为供应商精确计费数据。
 
-`app/evals` 提供无需人工主观打分的第一层可复现评测：检查任务期望的专家是否实际调用、是否出现预算拒绝、是否产生可引用证据，以及是否真正完成结论级审查并分布到 `direct / partial / conflicting / insufficient`。运行一次任务后，可执行：
+## 结论级证据校验
 
-```bash
-uv run python -m app.evals.runner --trace output/session_<session_id>/trace.jsonl --cases tests/fixtures/eval_cases.jsonl --output artifacts/eval-result.json
-```
+`evaluate_evidence` 检查引用字段是否完整；`verify_claim_support` 进一步确认候选结论引用的是本轮真实登记的证据、引文可定位、关键数值可核对。支持关系分为 `direct`、`partial`、`conflicting` 与 `insufficient`。
 
-后续可将人工标注的“结论—证据支持关系”加入 JSONL，统计引用支持准确率、关键结论覆盖率和无依据断言比例；当前仓库不会把该类尚未标注的指标写成已经达成的数值。
+`direct` 仅表示原文引用与数值可定位，不代表相关性已经证明因果。因果结论必须有实验、准实验或其他额外证据，否则平台要求降级为待验证推断。
 
-## 内置 Hybrid RAG
-
-知识库不依赖 RAGFlow 或第三方 RAG 平台，由应用自身维护完整链路：
+## Hybrid RAG
 
 ```text
 PDF / DOCX / Markdown / TXT
-        ↓ 文档解析与重叠分块
-OpenAI 兼容 Embedding → SQLite 持久化向量
-        ↓                         ↓
-中文字符 n-gram + SQLite FTS5 / BM25 词法召回 ← 语义余弦召回
-        ↓
-基于排名的 Reciprocal Rank Fusion（RRF）融合排序
-        ↓
-来源文件、分块编号、原文证据、融合分数
+        ↓ 分块与元数据保留
+Embedding 语义召回 ─┐
+FTS5 / BM25 词法召回 ├─ RRF 融合 ─→ 可引用证据分块
+                     ┘
 ```
 
-将内部资料放入任意目录后建立索引：
+知识库由应用自行维护，不依赖第三方 RAG 平台。中文文本在索引和查询两端均生成单字、双字 n-gram；语义与词法结果按排名进入 RRF，避免错误归一化 FTS5 的 BM25 原始分数。Embedding 模型和维度会写入索引元数据，不一致时要求重建。
+
+建立全局知识库：
 
 ```bash
 uv run python -m app.rag.indexer docs/knowledge_base
 ```
 
-索引默认保存在 `app/data/knowledge.db`，已被 `.gitignore` 排除。通过 `RAG_DB_PATH` 可改为部署环境中的持久化路径；通过 `RAG_EMBEDDING_MODEL` 指定 OpenAI 兼容的嵌入模型。中文文本在入库和查询两端统一生成单字和双字 n-gram，避免 `unicode61` 把连续中文当作单一 token；词法与语义候选分别按各自排名进入 RRF，因此不会对 FTS5 的负向 BM25 原始分数做错误归一化。
+上传文件会建立会话级索引，只能由当前会话检索。
 
-RRF 仅用于排序，不作为“可回答置信度”。当没有词法命中且最优语义相似度低于 `RAG_MIN_SEMANTIC_SCORE`（默认 `0.35`）时，知识助手会返回“证据不足”。索引还记录 Embedding 模型和向量维度；两者变更时会拒绝混用旧向量，要求重建索引。
+## Evaluation
 
-用户上传附件会自动建立独立的会话级索引，位于 `app/data/sessions/{thread_id}.db`。知识助手只合并全局知识库和当前会话索引，不会检索其他会话附件。
+评测口径、基线和复现要求见 [docs/evaluation.md](docs/evaluation.md)。仓库内置的轨迹评测会检查所需专家是否实际调用、是否发生预算拒绝、是否登记可引用证据，以及是否完成结论级审查：
 
-## 问数服务集成
-
-默认对接现有问数项目的 SSE 接口：
-
-```text
-POST {ECOM_ANALYTICS_API_URL}/api/query
+```bash
+uv run python -m app.evals.runner --trace output/session_<session_id>/trace.jsonl --cases tests/fixtures/eval_cases.jsonl --output artifacts/eval-result.json
 ```
 
-请求体：
+## 与企业经营智能问数 Agent 的边界
+
+| 能力 | 企业经营智能问数 Agent | 多智能体经营决策平台 |
+| --- | --- | --- |
+| 目标 | 回答指标、维度与趋势事实 | 回答可能原因、行动建议与证据是否充分 |
+| 数据访问 | Schema 检索、SQL 生成/校验、只读执行 | 仅调用分析服务，不连接业务库、不执行 SQL |
+| 核心技术 | LangGraph、检索、SQL 安全 | DeepAgents、Hybrid RAG、证据校验、上下文预算、轨迹评测 |
+| 产物 | 可审计的数据回答 | 跨源证据链、经营诊断、行动清单、Markdown/PDF |
+
+默认接入接口：
+
+```text
+POST {ANALYTICS_API_URL}/api/query
+```
 
 ```json
-{"query": "近 30 天女装品类 GMV 与转化率变化", "session_id": "当前会话 ID"}
+{"query": "分析本月华南区域收入、客户数和利润率的变化", "session_id": "当前会话 ID"}
 ```
 
-适配器会收集 SSE 事件，并对事件内的数据结构做有界截断，保证返回内容始终是合法 JSON；SSE 中的 `error` 事件会被判定为失败，不能作为经营事实使用。当前 SSE 协议未提供标准化的最终结果、时间范围或 SQL 审计字段，因此适配器会明确标记该限制。
+设置 `ANALYTICS_PROTOCOL=json` 时，适配器期望 `/api/analytics/query` 返回 `data`、`execution_status`、`metric_definition`、`time_range`、`sql_audit` 与 `limitations`。
 
-当问数项目新增 JSON 汇总端点后，可设置 `ECOM_ANALYTICS_PROTOCOL=json`，并实现 `POST /api/analytics/query`，返回 `data`、`execution_status`、`metric_definition`、`time_range`、`sql_audit` 与 `limitations`。无论哪种协议，平台均不透传或执行 SQL。
+## Domain Profile
 
-## 本地启动
+行业术语被隔离在 [app/config/domain_profile.yml](app/config/domain_profile.yml)。当前默认 Profile 为 `enterprise_operations`，定义“业务指标”“分析维度”“外部情报”“内部知识”和报告章节。替换 Profile 与上游数据源后，可适配制造、SaaS、金融服务或零售等不同经营场景，核心编排、检索和证据链无需重写。
 
-1. 安装后端：`uv sync`
-2. 复制 `.env.example` 为 `.env`，配置模型、Tavily、内置 Hybrid RAG 的 Embedding 模型和问数服务地址。
-3. 启动 API：`uv run uvicorn app.api.server:app --host 0.0.0.0 --port 8000 --reload`
-4. 启动前端：`cd frontend && pnpm install && pnpm dev`
+## Quick Start
 
-可尝试：
+```bash
+uv sync
+copy .env.example .env
+uv run uvicorn app.api.server:app --host 0.0.0.0 --port 8000 --reload
+```
+
+前端：
+
+```bash
+cd frontend
+pnpm install
+pnpm dev
+```
+
+示例任务：
 
 ```text
-分析近 30 天女装品类 GMV 下滑的可能原因：先查询经营数据，再检索主要竞品促销与平台规则变化；给出证据链、优先级排序的行动建议和待验证项，并生成 Markdown 报告。
+分析本月华南区域收入下降的可能原因：先查询收入、客户数与利润率等经营指标，再检索近期外部变化和内部业务资料；输出证据链、可能原因、待验证项及行动建议，并生成 Markdown 报告。
 ```
 
-## 后续演进
+## Tests
 
-1. 用 PostgreSQL 持久化任务、证据、报告版本和人工复核记录。
-2. 用 Redis 队列承载长任务、重试与并发限制。
-3. 增加指标异常检测、策略实验记录与报告评测集。
-4. 增加角色权限、组织隔离、文件安全扫描和审计日志。
+```bash
+uv run python -m unittest tests/test_platform_safety.py tests/test_context_engineering.py
+```
 
-## Acknowledgements
+## Provenance
 
-本项目的早期多智能体研究原型参考了 [didilili/deepsearch-agents](https://github.com/didilili/deepsearch-agents)。本项目已围绕电商增长情报场景，独立重构了产品定位、智能体协作边界、问数服务适配、证据审查机制与交互文案。
+本项目的早期多智能体研究原型参考了 [didilili/deepsearch-agents](https://github.com/didilili/deepsearch-agents)。当前仓库围绕企业经营决策场景重构了专家协作边界、通用分析服务适配、自建 Hybrid RAG、结论级证据校验、上下文预算与轨迹评测。
 
-> 原仓库未明确展示许可证；公开发布本项目之前，请确认原作者授权范围，或将保留的原始实现进一步替换为独立实现。
+发布前请继续核对保留代码的来源与授权范围；在确认所有保留实现的版权归属前，不应擅自声明新的开源许可证。

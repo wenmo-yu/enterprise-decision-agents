@@ -22,7 +22,7 @@ def _get_tavily_client() -> TavilyClient:
     """按需初始化，避免缺少外网检索配置时阻塞整个 API 服务启动。"""
     api_key = os.getenv("TAVILY_API_KEY")
     if not api_key:
-        raise ValueError("未配置 TAVILY_API_KEY，市场情报助手暂不可用。")
+        raise ValueError("未配置 TAVILY_API_KEY，外部情报专家暂不可用。")
     return TavilyClient(api_key=api_key)
 
 
@@ -37,7 +37,7 @@ def internet_search(
     """
     根据用户问题检索互联网公开信息
 
-    注意：本工具只用于外部公开网页、新闻、平台规则等信息，不用于查询经营数据或私有知识库
+    注意：本工具只用于外部公开网页、新闻、政策规则等信息，不用于查询经营数据或私有知识库
     :param query: 搜索关键词或自然语言问题
     :param topic: 搜索主题，可选 news、finance、general
     :param max_results: 返回的最大结果数
@@ -57,7 +57,7 @@ def internet_search(
     )
 
     try:
-        reserve_expert_call("market_intelligence", query)
+        reserve_expert_call("external_intelligence", query)
         # Tavily 返回 query、results、title、url、content 等结构化字段，后续由子智能体阅读并汇总
         result = _get_tavily_client().search(
             query=query,
@@ -65,7 +65,7 @@ def internet_search(
             max_results=max_results,
             include_raw_content=include_raw_content,
         )
-        evidence_id, compact, truncated = record_expert_result("market_intelligence", result, "公开来源")
+        evidence_id, compact, truncated = record_expert_result("external_intelligence", result, "公开来源")
         if isinstance(compact, dict):
             compact["evidence_id"] = evidence_id
             compact["context_truncated"] = truncated

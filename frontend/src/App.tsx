@@ -143,7 +143,7 @@ export default function App() {
     <div className="chat-app-shell min-h-dvh">
       <aside className="chat-sidebar" aria-label="会话信息">
         <div className="sidebar-brand">
-          <span className="panel-kicker">COMMERCE COMPASS</span>
+          <span className="panel-kicker">DECISION PLATFORM</span>
           <h1>多智能体经营决策平台</h1>
           <p>证据驱动的多智能体经营诊断</p>
         </div>
@@ -187,19 +187,19 @@ export default function App() {
           <ul className="agent-mini-list">
             <li>
               <CloudServerOutlined aria-hidden />
-              市场情报助手
+              外部情报专家
             </li>
             <li>
               <DatabaseOutlined aria-hidden />
-              经营问数助手
+              经营问数专家
             </li>
             <li>
               <FileSearchOutlined aria-hidden />
-              经营知识助手
+              内部知识专家
             </li>
             <li>
               <SafetyCertificateOutlined aria-hidden />
-              证据审查助手
+              证据审查专家
             </li>
           </ul>
         </div>
