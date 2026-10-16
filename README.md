@@ -206,8 +206,4 @@ pnpm approve-builds
 pnpm run build
 ```
 
-## 项目来源与授权
-
-本项目的早期多智能体研究原型参考了 [didilili/deepsearch-agents](https://github.com/didilili/deepsearch-agents)。当前仓库已围绕企业经营决策场景重构专家协作边界、内置语义问数、自建 Hybrid RAG、结论级证据校验、上下文预算与轨迹评测。
-
-发布前请继续核对保留代码的来源与授权范围；在确认所有保留实现的版权归属前，不应擅自声明新的开源许可证。
+依赖保留与清理结论见 [dependency-audit.md](docs/dependency-audit.md)。评测数据集、官方 scorer 与当前可复现边界见 [evaluation.md](docs/evaluation.md)。

@@ -47,6 +47,10 @@ class PlatformSafetyTests(unittest.TestCase):
         with self.assertRaises(ValueError):
             ReadOnlySQLGuard.validate("DELETE FROM fact_order")
 
+    def test_locking_select_is_rejected_before_execution(self):
+        with self.assertRaises(ValueError):
+            ReadOnlySQLGuard.validate("SELECT * FROM fact_order FOR UPDATE")
+
     def test_internal_citation_requires_retrieval_fields(self):
         result = evaluate_evidence.invoke({"claims_json": '[{"claim":"结论","sources":[{"type":"内部材料"}]}]'})
         self.assertIn("needs_evidence", result)

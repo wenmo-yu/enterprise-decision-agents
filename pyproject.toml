@@ -4,18 +4,15 @@ version = "0.1.0"
 description = "Evidence-aware multi-agent decision platform for enterprise operations."
 requires-python = ">=3.12,<3.13"
 dependencies = [
-    "aiofiles>=23.0.0",
     "asyncmy>=0.2.11",
     "deepagents==0.5.7",
     "elasticsearch[async]>=8,<9",
     "fastapi>=0.100.0",
     "httpx>=0.28.0",
     "langchain==1.2.17",
-    "langchain-community>=0.2.0",
     "langchain-core>=0.2.0",
     "langchain-openai==1.2.1",
     "langgraph==1.1.10",
-    "markdown>=3.5",
     "openai>=1.0.0",
     "openpyxl>=3.1.0",
     "pandas>=2.0.0",
@@ -27,7 +24,6 @@ dependencies = [
     "qdrant-client>=1.17.1",
     "pyyaml>=6.0",
     "reportlab>=4.0.0",
-    "requests>=2.31.0",
     "sqlalchemy>=2.0.0",
     "sqlglot>=26.0.0",
     "tavily-python==0.7.24",

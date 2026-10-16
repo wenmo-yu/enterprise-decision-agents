@@ -9,6 +9,7 @@ from __future__ import annotations
 import asyncio
 import json
 import os
+import re
 from typing import Any, TypedDict
 
 import httpx
@@ -19,7 +20,7 @@ from langgraph.graph import StateGraph
 from openai import AsyncOpenAI
 from qdrant_client import AsyncQdrantClient
 from sqlalchemy import bindparam, text
-from sqlalchemy.ext.asyncio import AsyncEngine, create_async_engine
+from sqlalchemy.ext.asyncio import create_async_engine
 from sqlglot import exp, parse
 
 from app.agent.llm import model
@@ -48,6 +49,8 @@ class ReadOnlySQLGuard:
 
     @staticmethod
     def validate(sql: str) -> str:
+        if re.search(r"\b(for\s+update|lock\s+in\s+share\s+mode)\b", sql, flags=re.IGNORECASE):
+            raise ValueError("不允许带锁的读取语句")
         try:
             statements = parse(sql, read="mysql")
         except Exception as exc:

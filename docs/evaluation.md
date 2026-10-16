@@ -11,6 +11,15 @@
 | Cross-source research | Serial research | TaskGroup parallel research | Mean latency | -35.4% |
 | Context management | Raw tool context | Artifact offloading + structured summary | Input tokens | -38.0% |
 
+## Benchmark sources and scorers
+
+| Benchmark | Official dataset / task definition | Official evaluation entry | How this project uses it |
+| --- | --- | --- | --- |
+| MultiHop-RAG | [Dataset repository](https://github.com/yixuantt/MultiHop-RAG) · [paper](https://arxiv.org/abs/2401.15391) | [`retrieval_evaluate.py`](https://github.com/yixuantt/MultiHop-RAG/blob/main/retrieval_evaluate.py) | Compare dense retrieval with Hybrid RAG + RRF using Hits@10. Keep the query set, corpus version and top-k fixed across variants. |
+| AVeriTeC | [Dataset repository](https://github.com/MichSchli/AVeriTeC) · [paper](https://arxiv.org/abs/2305.13117) | [`eval.py`](https://github.com/MichSchli/AVeriTeC/blob/main/AVeriTeC-score/eval.py) | Evaluate claim-level verdicts and evidence sufficiency. Preserve the official output schema before scoring. |
+
+The benchmark links make the task definitions and official scoring procedures inspectable; they do **not** by themselves prove the reported numbers above. The raw prediction files, run manifests and scorer outputs for those numbers are not committed yet, so the table should be treated as a recorded experiment result rather than independently reproducible evidence.
+
 ## Reproduction contract
 
 每一次可公开对比必须提交以下信息，不能只保留汇总数字：
