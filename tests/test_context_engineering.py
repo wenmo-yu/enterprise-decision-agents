@@ -1,3 +1,4 @@
+import asyncio
 import json
 import tempfile
 import unittest
@@ -10,6 +11,10 @@ from app.context_engineering.runtime import (
     reserve_expert_call,
     start_run,
 )
+from app.analytics.agent import LocalAnalyticsAgent
+from app.analytics.conversation import ConversationStateStore
+from app.tools.markdown_tools import generate_markdown
+from app.orchestration.parallel_research import _collect_fast_path
 from app.evals.trajectory import evaluate_trajectory
 from app.tools.evidence_tools import verify_claim_support
 
@@ -65,6 +70,44 @@ class ContextEngineeringTests(unittest.TestCase):
         )
         self.assertFalse(result["passed"])
         self.assertEqual(result["missing_experts"], ["internal_knowledge"])
+
+    def test_embedded_analytics_graph_builds_without_infrastructure(self):
+        self.assertIsNotNone(LocalAnalyticsAgent()._build_graph())
+
+    def test_semantic_parse_merges_metrics_dimensions_and_replaces_filters(self):
+        store = ConversationStateStore()
+        store.hydrate("session", "近30天收入")
+        merged = store.merge_semantic_parse(
+            "session",
+            {
+                "metrics": ["收入", "利润率"],
+                "dimensions": ["区域", "产品线"],
+                "filters": ["华北"],
+                "replace_filters": True,
+                "time_range": "近30天",
+                "limit": 10,
+            },
+        )
+        self.assertEqual(merged["metrics"], ["收入", "利润率"])
+        self.assertEqual(merged["dimensions"], ["区域", "产品线"])
+        self.assertEqual(merged["filters"], ["华北"])
+        self.assertEqual(merged["limit"], 10)
+
+    def test_formal_report_requires_claim_support_review(self):
+        with tempfile.TemporaryDirectory() as directory:
+            token = start_run(directory)
+            try:
+                result = generate_markdown.invoke({"content": "# report", "filename": "report"})
+                self.assertIn("必须先完成 verify_claim_support", result)
+            finally:
+                end_run(token)
+
+    def test_parallel_fast_path_keeps_other_sources_alive_after_one_failure(self):
+        async def failing_operation():
+            raise ConnectionError("external service unavailable")
+
+        result = asyncio.run(_collect_fast_path("external_intelligence", failing_operation()))
+        self.assertEqual(result["status"], "unavailable")
 
 
 if __name__ == "__main__":

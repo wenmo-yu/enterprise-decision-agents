@@ -18,6 +18,18 @@ from app.tools.knowledge_tools import search_internal_knowledge
 from app.tools.tavily_tool import internet_search
 
 
+async def _collect_fast_path(name: str, operation) -> dict[str, object]:
+    """将单一证据源故障降级为 unavailable，不能取消其他无依赖取证。"""
+    try:
+        result = await operation
+        return {"status": "completed", "result": result}
+    except asyncio.CancelledError:
+        raise
+    except Exception as error:
+        trace("parallel_research_source_unavailable", source=name, error=str(error))
+        return {"status": "unavailable", "error": str(error)}
+
+
 @tool
 async def parallel_research(
     question: str,
@@ -35,11 +47,11 @@ async def parallel_research(
     jobs: dict[str, asyncio.Task] = {}
     async with asyncio.TaskGroup() as group:
         if include_external_intelligence:
-            jobs["external_intelligence"] = group.create_task(asyncio.to_thread(internet_search.invoke, {"query": question, "topic": "general", "max_results": 5}))
+            jobs["external_intelligence"] = group.create_task(_collect_fast_path("external_intelligence", asyncio.to_thread(internet_search.invoke, {"query": question, "topic": "general", "max_results": 5})))
         if include_analytics:
-            jobs["analytics"] = group.create_task(analytics_query.ainvoke({"question": question}))
+            jobs["analytics"] = group.create_task(_collect_fast_path("analytics", analytics_query.ainvoke({"question": question})))
         if include_knowledge:
-            jobs["internal_knowledge"] = group.create_task(asyncio.to_thread(search_internal_knowledge.invoke, {"question": question, "limit": 5}))
+            jobs["internal_knowledge"] = group.create_task(_collect_fast_path("internal_knowledge", asyncio.to_thread(search_internal_knowledge.invoke, {"question": question, "limit": 5})))
     results = {name: task.result() for name, task in jobs.items()}
     payload = {
         "question": question,

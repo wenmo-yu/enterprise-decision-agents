@@ -8,7 +8,7 @@
 | --- | --- | --- | --- | --- |
 | MultiHop-RAG | Dense retrieval | Hybrid retrieval + RRF | Hits@10 | 71.8% → 83.6% |
 | AVeriTeC | Basic pipeline | Claim-evidence verification | AVeriTeC Score | 0.41 → 0.59 |
-| Cross-source research | Serial research | TaskGroup parallel research | Mean latency | -35.4% |
+| Cross-source research | Serial research | TaskGroup Tool parallel-research Fast Path | Mean latency | -35.4% |
 | Context management | Raw tool context | Artifact offloading + structured summary | Input tokens | -38.0% |
 
 ## Benchmark sources and scorers

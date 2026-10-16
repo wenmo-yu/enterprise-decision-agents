@@ -37,4 +37,4 @@ uv run python -m compileall -q app tests
 uv run python -m unittest tests/test_platform_safety.py tests/test_context_engineering.py
 ```
 
-The listed tests validate graph compilation, SQL safety guards, context budgets and evidence contracts. A real integration run additionally requires the MySQL metadata/warehouse, Qdrant and Elasticsearch services described in [analytics_setup.md](analytics_setup.md).
+The listed tests validate analytics-graph compilation, SQL safety guards, context budgets and evidence contracts. A real integration run additionally requires the MySQL metadata/warehouse, Qdrant and Elasticsearch services described in [analytics_setup.md](analytics_setup.md).

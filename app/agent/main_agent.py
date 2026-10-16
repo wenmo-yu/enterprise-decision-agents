@@ -25,7 +25,7 @@ from app.api.context import (
     set_thread_context,
 )
 from app.api.monitor import monitor
-from app.context_engineering.runtime import end_run, start_run
+from app.context_engineering.runtime import end_run, remaining_wall_time_seconds, start_run
 from app.orchestration.parallel_research import parallel_research
 
 # 文件类工具由主智能体直接掌握，负责读取上传附件和生成最终交付文档
@@ -118,42 +118,40 @@ async def run_deep_agent(task_query, session_id):
     """
 
     try:
-        # astream 会持续产出模型节点、工具节点和子智能体节点的状态片段
-        async for chunk in main_agent.astream(
-            {"messages": [{"role": "user", "content": task_query + path_instruction}]},
-            config=config,
-        ):
-            # chunk 形如 {"model": {"messages": [...]}}，这里主要关心模型最新消息
-            for node_name, state in chunk.items():
-                if not state or "messages" not in state:
-                    continue
-                messages = state["messages"]
-                if messages and isinstance(messages, list):
-                    last_msg = messages[-1]
-                    if node_name == "model":
-                        if last_msg.tool_calls:
-                            # DeepAgents 调用子智能体时，本质上会产生名为 task 的工具调用
-                            for tool_call in last_msg.tool_calls:
-                                if tool_call["name"] == "task":
-                                    # 子智能体调用单独上报，前端可以展示“正在调用哪个专家助手”
-                                    monitor.report_assistant(
-                                        tool_call["args"]["subagent_type"],
-                                        {
-                                            "description": tool_call["args"][
-                                                "description"
-                                            ]
-                                        },
-                                    )
-                        elif last_msg.content:
-                            # 模型没有继续调用工具时，最新文本内容就是本轮可反馈给前端的结果
-                            print(
-                                f"主智能体执行结果，最终结果：{last_msg.content[:100]}"
-                            )
-                            monitor.report_task_result(last_msg.content)
+        # astream 会持续产出模型节点、工具节点和子智能体节点的状态片段。
+        # 预算 deadline 同时作为最外层硬超时，超时后会取消尚未完成的异步工作。
+        async with asyncio.timeout(remaining_wall_time_seconds()):
+            async for chunk in main_agent.astream(
+                {"messages": [{"role": "user", "content": task_query + path_instruction}]},
+                config=config,
+            ):
+                # chunk 形如 {"model": {"messages": [...]}}，这里主要关心模型最新消息
+                for node_name, state in chunk.items():
+                    if not state or "messages" not in state:
+                        continue
+                    messages = state["messages"]
+                    if messages and isinstance(messages, list):
+                        last_msg = messages[-1]
+                        if node_name == "model":
+                            if last_msg.tool_calls:
+                                # DeepAgents 调用子智能体时，本质上会产生名为 task 的工具调用
+                                for tool_call in last_msg.tool_calls:
+                                    if tool_call["name"] == "task":
+                                        # 子智能体调用单独上报，前端可以展示“正在调用哪个专家助手”
+                                        monitor.report_assistant(
+                                            tool_call["args"]["subagent_type"],
+                                            {"description": tool_call["args"]["description"]},
+                                        )
+                            elif last_msg.content:
+                                # 模型没有继续调用工具时，最新文本内容就是本轮可反馈给前端的结果
+                                print(f"主智能体执行结果，最终结果：{last_msg.content[:100]}")
+                                monitor.report_task_result(last_msg.content)
 
     except asyncio.CancelledError:
         monitor.report_task_cancelled()
         raise
+    except TimeoutError:
+        monitor._emit("error", "任务已达到 AGENT_MAX_WALL_TIME_SECONDS 硬超时，已停止执行。")
     except Exception as e:
         # 异步执行异常也走 monitor，保证前端能收到明确错误事件
         monitor._emit("error", f"执行主智能发生异常信息：{str(e)}")

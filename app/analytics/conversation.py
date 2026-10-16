@@ -39,6 +39,29 @@ class ConversationStateStore:
                 "correction_attempts": 0,
             }
 
+    def merge_semantic_parse(self, session_id: str, parsed: dict) -> dict:
+        """将 LLM 解析出的指标/维度/条件与当前会话状态做显式合并。"""
+        with self._lock:
+            _history, state = self._states.setdefault(session_id, (deque(maxlen=6), StructuredQueryState()))
+            for name in ("metrics", "dimensions", "filters"):
+                values = parsed.get(name)
+                if isinstance(values, list) and values:
+                    cleaned = [str(value).strip() for value in values if str(value).strip()]
+                    if name == "filters" and parsed.get("replace_filters"):
+                        setattr(state, name, cleaned)
+                    else:
+                        merged = list(dict.fromkeys([*getattr(state, name), *cleaned]))
+                        setattr(state, name, merged)
+            for name in ("time_range", "sort", "limit"):
+                value = parsed.get(name)
+                if value not in (None, "", []):
+                    setattr(state, name, value)
+            return asdict(state)
+
+    @staticmethod
+    def full_intent(question: str, state: dict) -> str:
+        return ConversationStateStore._full_intent(question, state)
+
     @staticmethod
     def _update(state: StructuredQueryState, question: str) -> None:
         # 不将业务术语硬编码为唯一真相；模型/Schema 检索仍决定最终字段和指标。

@@ -56,7 +56,7 @@ project_root = current_dir.parent
 
 app = FastAPI(title="多智能体经营决策平台 API", lifespan=lifespan)
 
-# 保存 thread_id -> 后台 Agent 任务，用于同一会话任务替换和主动取消
+# 保存 thread_id -> 后台 Agent 任务；同一会话同一时间只允许一个任务写入其工作区。
 active_tasks: dict[str, asyncio.Task] = {}
 
 # output 保存每个会话最终工作区，前端只允许从这里浏览和下载生成文件
@@ -111,10 +111,10 @@ async def run_task(request: TaskRequest):
     """
     thread_id = _validate_thread_id(request.thread_id or str(uuid.uuid4()))
 
-    # 同一个 thread_id 只保留一个活跃任务，新任务会先取消旧任务，避免并发写同一会话目录
+    # 不在旧任务尚未退出时复用工作区：同步第三方调用无法保证立即响应取消。
     old_task = active_tasks.get(thread_id)
     if old_task and not old_task.done():
-        old_task.cancel()
+        raise HTTPException(status_code=409, detail="该会话仍有任务运行中，请先取消并等待其结束后再提交。")
 
     # create_task 把长耗时 Agent 执行交给事件循环，接口本身不用等待最终结果
     task = asyncio.create_task(run_deep_agent(request.query, thread_id))

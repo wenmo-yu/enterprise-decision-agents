@@ -2,7 +2,7 @@
 
 > 将结构化经营数据、外部情报和内部知识组织为带证据引用的经营诊断与行动建议。
 
-多智能体经营决策平台面向企业经营分析场景：主 Agent 根据问题拆解任务，按依赖关系调度外部情报、嵌入式语义问数、内部 Hybrid RAG 与结论级证据审查专家，最终输出可追溯的诊断、待验证项和 Markdown/PDF 报告。
+多智能体经营决策平台面向企业经营分析场景：主 Agent 根据问题动态调度外部情报、嵌入式语义问数、内部 Hybrid RAG 与证据审查子 Agent；对无依赖的数据源提供并行取证 Fast Path，最终输出可追溯的诊断、待验证项和 Markdown/PDF 报告。
 
 问数能力已内置在本仓库：LangGraph 子图负责三路 Schema 检索、SQL 生成、预检、一次自纠错和只读执行；多智能体层负责跨源协作、上下文预算、证据链与报告交付。
 
@@ -26,7 +26,7 @@
 | 步骤 | 用户操作 | 系统执行 | 可见产物 |
 | --- | --- | --- | --- |
 | 1. 提出问题 | 输入区域、客户、收入、利润或效率相关问题 | 主 Agent 识别是否需要跨源取证 | 任务与执行轨迹 |
-| 2. 并行取证 | 可上传内部资料，也可选择只使用部分数据源 | `TaskGroup` 并行调度外部情报、经营问数和内部知识检索 | 结构化专家结果、`evidence_id` |
+| 2. 并行取证 | 可上传内部资料，也可选择只使用部分数据源 | `TaskGroup` 并发执行外部情报、问数和知识检索 Tool 的 Fast Path；单源失败降级为 `unavailable` | 结构化取证结果、`evidence_id` |
 | 3. 问数核验 | 提问指标、维度或趋势事实 | LangGraph 进行 Schema 三路检索、SQL 预检、有限纠错和只读执行 | 数据结果、SQL 审计摘要、时间与口径 |
 | 4. 审查结论 | 要求诊断或报告 | 证据审查专家检查引用、原文定位、数值和支持关系 | `direct / partial / conflicting / insufficient` |
 | 5. 交付结果 | 请求汇总或导出 | 主 Agent 生成经营诊断、待验证项和行动建议 | 对话结论、Markdown/PDF 报告 |
@@ -48,10 +48,12 @@
                     经营诊断、行动建议、报告交付
 ```
 
-- **结论可追溯**：工具结果以 `evidence_id` 登记，结论必须指向本轮真实证据。
+- **结论可追溯**：工具结果以 `evidence_id` 登记；正式报告生成前必须完成一次本轮证据编号与引用原文的支持关系审查。
 - **因果不越界**：共现信息不能直接表述为因果；证据不足时强制降级为推断或待验证项。
-- **上下文可控**：原始网页、SSE 事件和文档分块进入会话 artifact，模型只接收结构化高信号摘要。
+- **上下文可控**：原始网页响应和文档分块进入会话 artifact，模型只接收结构化高信号摘要。
 - **问数可治理**：数据库账户应是只读账户；应用层使用 `sqlglot` 拒绝多语句、写操作和文件读写 SQL，再用 `EXPLAIN` 预检。
+
+当前证据审查验证“本轮真实证据编号、原文摘录和数值是否可定位”，并把因果判断降级为推断；`conflicting` 仅表示已登记的冲突证据被显式关联，尚不等同于自动语义矛盾检测。
 
 ## 系统架构
 
@@ -59,10 +61,10 @@
 flowchart TD
     U[企业经营问题 / 上传资料] --> M[DeepAgents 主 Agent]
     M --> P[任务依赖规划与上下文预算]
-    P --> X[TaskGroup 并行取证]
-    X --> E[外部情报专家<br/>Tavily]
-    X --> A[经营问数专家<br/>本地 LangGraph 子图]
-    X --> K[内部知识专家<br/>Hybrid RAG]
+    P --> X[TaskGroup 并行取证 Fast Path<br/>Tools，不是并行子 Agent]
+    X --> E[外部情报 Tool<br/>Tavily]
+    X --> A[经营问数 Tool<br/>本地 LangGraph 子图]
+    X --> K[内部知识 Tool<br/>Hybrid RAG]
     A --> Q[Qdrant 字段/指标召回]
     A --> S[Elasticsearch 字段值检索]
     A --> D[MySQL 只读执行]
@@ -82,7 +84,7 @@ flowchart TD
 
 | 层 | 技术 | 在项目中的用途 |
 | --- | --- | --- |
-| 多智能体编排 | DeepAgents、LangGraph、`asyncio.TaskGroup` | 主 Agent、专家路由、无依赖取证并发与问数子图 |
+| 多智能体编排 | DeepAgents、LangGraph、`asyncio.TaskGroup` | 主 Agent/子 Agent 路由、无依赖 Tool 并行取证 Fast Path 与问数子图 |
 | 经营问数 | Qdrant、Elasticsearch、MySQL、SQLAlchemy Async、sqlglot | 字段/指标 Dense 召回、字段值检索、Schema 扩展、SQL 预检与只读执行 |
 | 内部知识 RAG | SQLite FTS5、Embedding、RRF | 中文 n-gram 词法检索、语义检索、可引用分块与会话隔离 |
 | 证据与上下文 | Evidence Registry、JSONL Trace、artifact offloading | 引用登记、结论级验证、预算、审计与轨迹评测 |
@@ -94,7 +96,7 @@ flowchart TD
 | 想看什么 | 从这里开始 |
 | --- | --- |
 | 主 Agent、会话隔离与流式监控 | [app/agent/main_agent.py](app/agent/main_agent.py) |
-| 并行专家取证与依赖约束 | [app/orchestration/parallel_research.py](app/orchestration/parallel_research.py) |
+| 并行 Tool 取证 Fast Path 与依赖约束 | [app/orchestration/parallel_research.py](app/orchestration/parallel_research.py) |
 | 内置问数 LangGraph 子图 | [app/analytics/agent.py](app/analytics/agent.py) |
 | 连续追问结构化状态 | [app/analytics/conversation.py](app/analytics/conversation.py) |
 | SQL 只读校验 | [app/analytics/agent.py](app/analytics/agent.py) |
@@ -138,7 +140,7 @@ uv run python -m app.rag.indexer docs/knowledge_base
 
 ## 评测与可观测性
 
-项目将“是否调用了 Agent”转化为可验证的运行轨迹。每轮运行生成 `trace.jsonl`，记录专家调用、预算拒绝、证据登记和结论级审查事件；完整原始工具结果保存在会话 `artifacts/`，避免挤占模型上下文。
+项目将“是否调用了 Agent”转化为可验证的运行轨迹。每轮运行生成 `trace.jsonl`，记录子 Agent/Tool 调用、预算拒绝、证据登记和结论级审查事件；完整原始工具结果保存在会话 `artifacts/`，避免挤占模型上下文。
 
 ```bash
 uv run python -m app.evals.runner --trace output/session_<session_id>/trace.jsonl --cases tests/fixtures/eval_cases.jsonl --output artifacts/eval-result.json
@@ -150,7 +152,7 @@ uv run python -m app.evals.runner --trace output/session_<session_id>/trace.json
 
 | 验证项 | 当前结果 | 边界 |
 | --- | --- | --- |
-| Python 回归测试 | 8 项通过 | 覆盖路径隔离、RAG 空文件清理、结构化截断、SQL 写操作拒绝、证据与预算规则 |
+| Python 回归测试 | 13 项通过 | 覆盖路径隔离、RAG 空文件清理、结构化截断、SQL 写/锁定读取拒绝、图装配、结构化状态、证据门禁、并行故障隔离与预算规则 |
 | 问数子图装配 | LangGraph 可编译 | 未连接真实 MySQL/Qdrant/Elasticsearch 数据基础设施 |
 | 依赖锁定 | `uv lock --check` 通过 | 不替代部署环境的连接与权限验证 |
 | 展示界面 | README 预览图已更新 | 当前为可复现的界面展示，不替代完整前端端到端验收 |

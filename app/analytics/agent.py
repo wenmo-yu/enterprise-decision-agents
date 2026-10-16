@@ -88,6 +88,7 @@ class LocalAnalyticsAgent:
 
     def _build_graph(self):
         graph = StateGraph(AnalyticsState)
+        graph.add_node("parse_intent", self._parse_intent)
         graph.add_node("retrieve_schema", self._retrieve_schema)
         graph.add_node("expand_schema", self._expand_schema)
         graph.add_node("generate_sql", self._generate_sql)
@@ -95,7 +96,8 @@ class LocalAnalyticsAgent:
         graph.add_node("correct_sql", self._correct_sql)
         graph.add_node("run_sql", self._run_sql)
         graph.add_node("report_failure", lambda state: {"error": state.get("error") or "问数失败"})
-        graph.add_edge(START, "retrieve_schema")
+        graph.add_edge(START, "parse_intent")
+        graph.add_edge("parse_intent", "retrieve_schema")
         graph.add_edge("retrieve_schema", "expand_schema")
         graph.add_edge("expand_schema", "generate_sql")
         graph.add_edge("generate_sql", "validate_sql")
@@ -108,6 +110,27 @@ class LocalAnalyticsAgent:
         graph.add_edge("run_sql", END)
         graph.add_edge("report_failure", END)
         return graph.compile()
+
+    async def _parse_intent(self, state: AnalyticsState) -> dict[str, Any]:
+        """用受限 JSON 提取指标、维度与筛选项，再与会话结构化状态合并。"""
+        instruction = """从用户经营分析问题中提取 JSON，不要输出 Markdown。键仅限：
+metrics(list[str])、time_range(str|null)、dimensions(list[str])、filters(list[str])、
+replace_filters(bool)、sort(ascending|descending|null)、limit(int|null)。
+不确定时使用空列表或 null，不能编造字段名。"""
+        try:
+            response = await model.ainvoke([SystemMessage(content=instruction), HumanMessage(content=state["question"])])
+            text_value = str(response.content).strip().removeprefix("```json").removesuffix("```").strip()
+            parsed = json.loads(text_value)
+            if not isinstance(parsed, dict):
+                raise ValueError("intent parser did not return an object")
+            structured = conversation_state_store.merge_semantic_parse(state["session_id"], parsed)
+            return {
+                "structured_query": structured,
+                "analysis_query": conversation_state_store.full_intent(state["question"], structured),
+            }
+        except (ValueError, TypeError, json.JSONDecodeError):
+            # 解析失败时继续使用 hydrate 的规则型状态，不能阻断问数主链路。
+            return {}
 
     def _openai(self) -> AsyncOpenAI:
         return AsyncOpenAI(api_key=os.getenv("OPENAI_API_KEY", "not-configured"), base_url=os.getenv("OPENAI_BASE_URL"))

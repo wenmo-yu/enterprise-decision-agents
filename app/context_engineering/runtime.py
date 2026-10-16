@@ -1,6 +1,6 @@
 """请求级上下文预算、可追溯工具产物与轨迹记录。
 
-这里刻意不把完整网页、SSE 事件或文档分块塞回主 Agent 的消息历史：原始产物
+这里刻意不把完整网页响应或文档分块塞回主 Agent 的消息历史：原始产物
 保存在当前会话目录，模型只得到有上限的结构化摘要。预算是程序级约束，而不是
 依赖提示词的约定。
 """
@@ -31,6 +31,7 @@ class RunState:
     context_tokens: int = 0
     sequence: int = 0
     evidence: dict[str, dict[str, Any]] = field(default_factory=dict)
+    claim_support_reviewed: bool = False
 
 
 _run_ctx: ContextVar[RunState | None] = ContextVar("context_engineering_run", default=None)
@@ -82,7 +83,14 @@ def budget_snapshot() -> dict[str, Any]:
         "context_tokens": state.context_tokens,
         "max_context_tokens": state.max_context_tokens,
         "remaining_seconds": max(0, round(state.deadline - time.monotonic(), 2)),
+        "claim_support_reviewed": state.claim_support_reviewed,
     }
+
+
+def remaining_wall_time_seconds() -> float:
+    """返回本轮硬超时剩余时间，供最外层协程取消长时间运行。"""
+    state = current_state()
+    return max(0.0, state.deadline - time.monotonic()) if state else 180.0
 
 
 def trace(event: str, **data: Any) -> None:
@@ -163,6 +171,19 @@ def get_evidence(evidence_id: str) -> dict[str, Any] | None:
     if not state:
         return None
     return state.evidence.get(evidence_id)
+
+
+def mark_claim_support_reviewed() -> None:
+    """记录已完成结论支持关系审查，正式报告生成以此为硬门禁。"""
+    state = current_state()
+    if state:
+        state.claim_support_reviewed = True
+        trace("claim_support_gate_satisfied")
+
+
+def claim_support_reviewed() -> bool:
+    state = current_state()
+    return bool(state and state.claim_support_reviewed)
 
 
 def record_expert_result(expert: str, result: Any, source_type: str) -> tuple[str, Any, bool]:

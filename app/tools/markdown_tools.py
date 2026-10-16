@@ -15,6 +15,7 @@ from langchain_core.tools import tool
 
 from app.api.context import get_session_context
 from app.api.monitor import monitor
+from app.context_engineering.runtime import claim_support_reviewed
 from app.utils.path_utils import resolve_path
 
 
@@ -34,6 +35,8 @@ def generate_markdown(
     """
     print(f"[MarkdownTool] 输入保存路径: {path or '当前会话目录'}")
     monitor.report_tool("Markdown文档生成工具", {"写入的文本内容": content})
+    if not claim_support_reviewed():
+        return "生成Markdown文件失败: 正式报告必须先完成 verify_claim_support 结论级证据审查。"
     if not filename.endswith(".md"):
         filename += ".md"
 

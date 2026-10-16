@@ -8,7 +8,7 @@ from urllib.parse import urlparse
 from langchain_core.tools import tool
 
 from app.api.monitor import monitor
-from app.context_engineering.runtime import get_evidence, trace
+from app.context_engineering.runtime import get_evidence, mark_claim_support_reviewed, trace
 
 
 @tool
@@ -70,7 +70,8 @@ def verify_claim_support(claims_json: str) -> str:
 
     输入为数组，每项应含 claim、evidence_ids 和可选 evidence_quote。evidence_ids 必须是
     本轮专家工具返回的编号。返回 direct/partial/conflicting/insufficient；其中 direct
-    仅表示引用原文与关键数字可核对，不把相关性伪装成因果证明。
+    仅表示引用原文与关键数字可核对，不把相关性伪装成因果证明。conflicting 仅表示
+    调用方声明的冲突证据编号已在本轮登记，当前版本不做自动语义矛盾判定。
     """
     monitor.report_tool("结论级证据校验", {"payload_length": len(claims_json)})
     try:
@@ -80,7 +81,7 @@ def verify_claim_support(claims_json: str) -> str:
     if not isinstance(claims, list) or not claims:
         return "至少需要提供一条候选结论。"
 
-    causal_words = ("导致", "因为", "造成", "归因", "因果", "cause")
+    causal_words = ("导致", "因为", "造成", "归因", "因果", "源于", "驱动", "受.*影响", "cause")
     review = []
     for index, item in enumerate(claims, start=1):
         claim = str(item.get("claim", "")) if isinstance(item, dict) else ""
@@ -102,9 +103,12 @@ def verify_claim_support(claims_json: str) -> str:
             issues.append(f"证据原文无法核对数值: {', '.join(missing_numbers)}")
         if quote and quote not in joined:
             issues.append("evidence_quote 不存在于登记证据原文")
-        is_causal = any(word in claim.lower() for word in causal_words)
+        is_causal = any(re.search(word, claim, flags=re.IGNORECASE) for word in causal_words)
         conflict_ids = item.get("conflicts_with_evidence_ids", []) if isinstance(item, dict) else []
-        has_declared_conflict = bool(conflict_ids)
+        valid_conflict_ids = [str(evidence_id) for evidence_id in conflict_ids if get_evidence(str(evidence_id))]
+        if conflict_ids and len(valid_conflict_ids) != len(conflict_ids):
+            issues.append("存在未在本轮真实取证结果中登记的 conflict evidence_id")
+        has_declared_conflict = bool(valid_conflict_ids)
         if is_causal:
             issues.append("因果结论只能作为推断；现有引用不能单独证明因果")
         if not found or not claim:
@@ -119,11 +123,12 @@ def verify_claim_support(claims_json: str) -> str:
             "claim_index": index,
             "claim": claim,
             "evidence_ids": evidence_ids,
-            "conflicts_with_evidence_ids": conflict_ids,
+            "conflicts_with_evidence_ids": valid_conflict_ids,
             "support_level": level,
             "issues": issues,
             "next_action": "补充检索或降级为待验证推断" if level != "direct" else "可保留原文引用，并标明适用范围",
         })
     levels = {level: sum(item["support_level"] == level for item in review) for level in ("direct", "partial", "conflicting", "insufficient")}
+    mark_claim_support_reviewed()
     trace("claim_support_reviewed", claims=len(review), support_levels=levels)
     return json.dumps({"review": review}, ensure_ascii=False)
