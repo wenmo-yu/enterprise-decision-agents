@@ -1,22 +1,18 @@
-"""通用经营分析服务适配器，兼容现有 SSE 接口与未来的 JSON 汇总接口。"""
+"""嵌入式经营问数工具：直接调用当前仓库内的 LangGraph 子图。"""
 
 import json
-import os
 from typing import Any
 
-import requests
 from langchain_core.tools import tool
 
+from app.analytics.agent import LocalAnalyticsAgent
 from app.api.context import get_thread_context
 from app.api.monitor import monitor
 from app.context_engineering.runtime import BudgetExceeded, record_expert_result, reserve_expert_call
 
 
-SUCCESS_STATUSES = {"success", "succeeded", "completed", "ok"}
-
-
 def _bounded(value: Any, *, max_items: int = 50, max_text: int = 2_000) -> tuple[Any, bool]:
-    """在数据结构内截断，永远返回可序列化的完整 JSON。"""
+    """在数据结构内限制行数与文本长度，保证返回内容仍是合法 JSON。"""
     if isinstance(value, str):
         return value[:max_text], len(value) > max_text
     if isinstance(value, list):
@@ -36,62 +32,24 @@ def _bounded(value: Any, *, max_items: int = 50, max_text: int = 2_000) -> tuple
     return value, False
 
 
-def _consume_sse(response: requests.Response) -> dict[str, Any]:
-    events: list[dict[str, Any]] = []
-    for raw_line in response.iter_lines(decode_unicode=True):
-        if not raw_line or not raw_line.startswith("data:"):
-            continue
-        raw_data = raw_line.removeprefix("data:").strip()
-        try:
-            event = json.loads(raw_data)
-        except json.JSONDecodeError:
-            event = {"type": "unparsed", "message": raw_data}
-        if isinstance(event, dict) and event.get("type") == "error":
-            return {"execution_status": "failed", "data": events, "error": event.get("message", "分析服务返回错误")}
-        events.append(event if isinstance(event, dict) else {"type": "data", "data": event})
-    bounded_events, truncated = _bounded(events)
-    return {"execution_status": "completed", "data": bounded_events, "truncated": truncated, "limitations": "上游当前仅提供 SSE 事件流；未提供标准化的最终结果、时间范围和 SQL 审计字段。"}
-
-
 @tool
-def analytics_query(question: str, context: str = "") -> str:
-    """查询独立经营分析服务，只消费其只读执行后的结果，不暴露 SQL 执行能力。"""
-    monitor.report_tool("经营分析服务", {"question": question, "has_context": bool(context)})
-    base_url = os.getenv("ANALYTICS_API_URL", "").rstrip("/")
-    protocol = os.getenv("ANALYTICS_PROTOCOL", "sse").lower()
-    timeout = float(os.getenv("ANALYTICS_TIMEOUT_SECONDS", "60"))
-    if not base_url:
-        return "经营分析服务未配置。请设置 ANALYTICS_API_URL。"
-
+async def analytics_query(question: str, context: str = "") -> str:
+    """在当前应用内执行语义问数：Schema 三路检索、SQL 校验、有限纠错与只读执行。"""
+    monitor.report_tool("嵌入式经营问数", {"question": question, "has_context": bool(context)})
     try:
         reserve_expert_call("analytics", f"{question}\n{context}")
-        if protocol == "sse":
-            response = requests.post(f"{base_url}/api/query", json={"query": question, "session_id": get_thread_context() or "decision-platform"}, headers={"Accept": "text/event-stream"}, stream=True, timeout=timeout)
-            response.raise_for_status()
-            payload = _consume_sse(response)
-        elif protocol == "json":
-            response = requests.post(f"{base_url}/api/analytics/query", json={"question": question, "context": context, "caller": "enterprise_decision_agents"}, timeout=timeout)
-            response.raise_for_status()
-            payload = response.json()
-            if not isinstance(payload, dict) or "data" not in payload or "execution_status" not in payload:
-                return "经营分析 JSON 接口响应缺少 data 或 execution_status。"
-            if str(payload["execution_status"]).lower() not in SUCCESS_STATUSES:
-                return f"经营分析服务执行失败：{payload.get('error') or payload.get('message') or payload['execution_status']}"
-            payload, truncated = _bounded(payload)
-            payload["upstream_execution_status"] = payload["execution_status"]
-            payload["execution_status"] = "completed"
-            payload["truncated"] = truncated
-        else:
-            return "ANALYTICS_PROTOCOL 仅支持 sse 或 json。"
-    except (requests.RequestException, BudgetExceeded) as error:
-        return f"经营分析服务调用失败：{error}"
-    except ValueError:
-        return "经营分析服务返回了非 JSON 响应。"
+        full_question = question if not context else f"{question}\n补充上下文：{context}"
+        payload = await LocalAnalyticsAgent().run(full_question, get_thread_context() or "decision-platform")
+    except BudgetExceeded as error:
+        return f"嵌入式经营问数未执行：{error}"
+    except Exception as error:
+        return f"嵌入式经营问数失败：{error}"
 
-    if payload["execution_status"] != "completed":
-        return f"经营分析服务执行失败：{payload.get('error', payload['execution_status'])}"
-    evidence_id, compact, truncated = record_expert_result("analytics", payload, "经营数据")
+    if payload.get("execution_status") != "completed":
+        return f"嵌入式经营问数失败：{payload.get('error', '未知错误')}"
+    payload, truncated = _bounded(payload)
+    evidence_id, compact, compacted = record_expert_result("analytics", payload, "经营数据")
     if isinstance(compact, dict):
         compact["evidence_id"] = evidence_id
-        compact["context_truncated"] = truncated
+        compact["truncated"] = bool(truncated or compacted)
     return json.dumps(compact, ensure_ascii=False, default=str)

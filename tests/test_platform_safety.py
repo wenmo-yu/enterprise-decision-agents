@@ -3,7 +3,8 @@ import unittest
 from pathlib import Path
 
 from app.rag.hybrid_store import HybridKnowledgeBase
-from app.tools.analytics_query_tool import _bounded, _consume_sse
+from app.analytics.agent import ReadOnlySQLGuard
+from app.tools.analytics_query_tool import _bounded
 from app.tools.evidence_tools import evaluate_evidence
 from app.utils.path_utils import resolve_path
 
@@ -42,9 +43,9 @@ class PlatformSafetyTests(unittest.TestCase):
         self.assertTrue(truncated)
         self.assertEqual(len(payload["data"][0]), 2_000)
 
-    def test_sse_error_is_not_reported_as_success(self):
-        response = type("Response", (), {"iter_lines": lambda self, decode_unicode: iter(['data: {\"type\": \"error\", \"message\": \"blocked\"}'])})()
-        self.assertEqual(_consume_sse(response)["execution_status"], "failed")
+    def test_write_sql_is_rejected_before_execution(self):
+        with self.assertRaises(ValueError):
+            ReadOnlySQLGuard.validate("DELETE FROM fact_order")
 
     def test_internal_citation_requires_retrieval_fields(self):
         result = evaluate_evidence.invoke({"claims_json": '[{"claim":"结论","sources":[{"type":"内部材料"}]}]'})

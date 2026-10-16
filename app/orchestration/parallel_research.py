@@ -37,7 +37,7 @@ async def parallel_research(
         if include_external_intelligence:
             jobs["external_intelligence"] = group.create_task(asyncio.to_thread(internet_search.invoke, {"query": question, "topic": "general", "max_results": 5}))
         if include_analytics:
-            jobs["analytics"] = group.create_task(asyncio.to_thread(analytics_query.invoke, {"question": question}))
+            jobs["analytics"] = group.create_task(analytics_query.ainvoke({"question": question}))
         if include_knowledge:
             jobs["internal_knowledge"] = group.create_task(asyncio.to_thread(search_internal_knowledge.invoke, {"question": question, "limit": 5}))
     results = {name: task.result() for name, task in jobs.items()}

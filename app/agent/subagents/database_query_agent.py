@@ -1,4 +1,4 @@
-"""经营分析专家：通过服务边界复用独立的语义问数项目。"""
+"""经营分析专家：调用当前应用内的语义问数 LangGraph 子图。"""
 
 from app.agent.prompts import sub_agents_content
 from app.tools.analytics_query_tool import analytics_query
